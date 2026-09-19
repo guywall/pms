@@ -1,0 +1,27 @@
+@import 'tailwindcss';
+
+/* Filament panel package styles — the custom theme must compile these
+   (Filament's dist/theme.css is exactly this bundle; registering a custom
+   theme replaces it, so it has to be rebuilt here). */
+@import '../../../../vendor/filament/support/resources/css/index.css';
+@import '../../../../vendor/filament/actions/resources/css/index.css';
+@import '../../../../vendor/filament/forms/resources/css/index.css';
+@import '../../../../vendor/filament/infolists/resources/css/index.css';
+@import '../../../../vendor/filament/notifications/resources/css/index.css';
+@import '../../../../vendor/filament/schemas/resources/css/index.css';
+@import '../../../../vendor/filament/tables/resources/css/index.css';
+@import '../../../../vendor/filament/widgets/resources/css/index.css';
+@import '../../../../vendor/filament/filament/resources/css/index.css';
+
+/* App views with custom Tailwind markup (production board, scan page). */
+@source '../../../../resources/views/**/*.blade.php';
+@source '../../../../app/Filament/**/*.php';
+@source '../../../../app/Livewire/**/*.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* Filament toggles dark mode with a .dark class, not the OS setting. */
+@variant dark (&:where(.dark, .dark *));

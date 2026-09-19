@@ -26,6 +26,7 @@ class PortalPanelProvider extends PanelProvider
             ->path('portal')
             ->login(Login::class)
             ->colors(['primary' => Color::Indigo])
+            ->viteTheme('resources/css/filament/staff/theme.css')
             ->brandName('PrintAbility — Customer Portal')
             ->darkMode(false)
             ->discoverResources(in: app_path('Filament/Portal/Resources'), for: 'App\\Filament\\Portal\\Resources')

@@ -120,16 +120,25 @@ at `/admin`.
 
 ## 4. Future updates
 
-1. Commit & push from GitHub Desktop.
-2. Deploy the new code: *Fetch & Deploy* in Plesk Git (or `git pull`).
-3. Run:
+1. If CSS/blade views changed: build the theme locally and commit the
+   compiled output (the server has no Node):
+
+   ```bash
+   npm install        # first time only
+   npm run build
+   git add public/build
+   ```
+
+2. Commit & push from GitHub Desktop.
+3. Deploy the new code: *Fetch & Deploy* in Plesk Git.
+4. Run:
 
 ```bash
 bash scripts/update.sh
 ```
 
 That does `composer install --no-dev`, `migrate --force` and rebuilds
-all caches. To skip step 3 permanently, put exactly those commands into
+all caches. To skip step 4 permanently, put exactly those commands into
 the repo's **Deployment actions** in the Plesk Git settings:
 
 ```
@@ -138,6 +147,9 @@ bash scripts/update.sh
 
 (Plesk runs deployment actions from the repo root, so the relative
 path works. PHP/Composer discovery inside the script is automatic.)
+
+> **Note:** `public/build` IS committed (the compiled Tailwind theme
+> lives there and the server has no Node). `node_modules` is not.
 
 ## 5. Post-deploy checklist
 

@@ -27,6 +27,7 @@ class StaffPanelProvider extends PanelProvider
             ->login()
             ->favicon(asset('favicon.ico'))
             ->colors(['primary' => Color::Amber])
+            ->viteTheme('resources/css/filament/staff/theme.css')
             ->brandName('PrintAbility')
             ->discoverResources(in: app_path('Filament/Staff/Resources'), for: 'App\\Filament\\Staff\\Resources')
             ->discoverPages(in: app_path('Filament/Staff/Pages'), for: 'App\\Filament\\Staff\\Pages')

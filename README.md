@@ -68,6 +68,20 @@ Full walkthrough: `DEPLOYMENT.md`. Future updates after a git pull:
 - **Audit**: every order edit and stage move is captured by
   spatie/laravel-activitylog and shown on the order's History tab.
 
+## Front-end theme
+
+The Filament panels use a custom Tailwind theme
+(`resources/css/filament/staff/theme.css`) that compiles Filament's own
+package CSS **plus** the app's custom views (production board, scan
+page). If you edit those views' classes, rebuild and commit:
+
+```bash
+npm install && npm run build   # commit public/build afterwards
+```
+
+The compiled `public/build` output is committed because the production
+server has no Node.
+
 ## Testing
 
 ```bash
