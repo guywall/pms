@@ -8,34 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('suppliers', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('contact_name')->nullable();
-            $table->string('email')->nullable();
-            $table->string('phone')->nullable();
-            $table->text('address')->nullable();
-            $table->text('notes')->nullable();
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
+        // suppliers + stock_items are created in 180001 so that
+        // order_lines.stock_item_id (created here) can reference them.
 
-        Schema::create('stock_items', function (Blueprint $table) {
+        Schema::create('order_lines', function (Blueprint $table) {
             $table->id();
-            $table->string('sku')->unique();
-            $table->string('name');
+            $table->foreignId('order_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('stock_item_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('description');
             $table->string('type', 20)->default('garment');
-            $table->string('category')->nullable();
-            $table->string('unit', 20)->default('each');
-            $table->unsignedInteger('qty_on_hand')->default(0);
-            $table->unsignedInteger('qty_reserved')->default(0);
-            $table->unsignedInteger('reorder_level')->default(0);
-            $table->unsignedInteger('reorder_qty')->default(0);
-            $table->foreignId('supplier_id')->nullable()->constrained()->nullOnDelete();
-            $table->unsignedInteger('cost')->default(0);
+            $table->unsignedInteger('quantity')->default(1);
+            $table->unsignedInteger('price')->default(0);
             $table->text('notes')->nullable();
             $table->timestamps();
-            $table->index(['type', 'category']);
         });
 
         Schema::create('order_stock_allocations', function (Blueprint $table) {
@@ -46,7 +31,8 @@ return new class extends Migration
             $table->unsignedInteger('qty_allocated')->default(0);
             $table->unsignedInteger('qty_issued')->default(0);
             $table->string('status', 30)->default('reserved');
-            $table->foreignId('purchase_order_id')->nullable()->constrained()->nullOnDelete();
+            // purchase_orders doesn't exist yet — FK added in 180003
+            $table->unsignedBigInteger('purchase_order_id')->nullable()->index();
             $table->timestamps();
             $table->index(['order_id', 'status']);
         });
@@ -77,7 +63,6 @@ return new class extends Migration
         Schema::dropIfExists('number_sequences');
         Schema::dropIfExists('stock_movements');
         Schema::dropIfExists('order_stock_allocations');
-        Schema::dropIfExists('stock_items');
-        Schema::dropIfExists('suppliers');
+        Schema::dropIfExists('order_lines');
     }
 };

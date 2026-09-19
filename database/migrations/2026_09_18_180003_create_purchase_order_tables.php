@@ -32,10 +32,18 @@ return new class extends Migration
             $table->unsignedInteger('unit_cost')->default(0);
             $table->timestamps();
         });
+
+        // Now that purchase_orders exists, add the FK deferred from 180002.
+        Schema::table('order_stock_allocations', function (Blueprint $table) {
+            $table->foreign('purchase_order_id')->references('id')->on('purchase_orders')->nullOnDelete();
+        });
     }
 
     public function down(): void
     {
+        Schema::table('order_stock_allocations', function (Blueprint $table) {
+            $table->dropForeign(['purchase_order_id']);
+        });
         Schema::dropIfExists('purchase_order_lines');
         Schema::dropIfExists('purchase_orders');
     }

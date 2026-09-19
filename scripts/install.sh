@@ -46,6 +46,10 @@ for candidate in /opt/plesk/php/8.3/bin/php /opt/plesk/php/8.2/bin/php /usr/bin/
     esac
 done
 [ -n "$PHP_BIN" ] || die "No PHP >= 8.2 found. Install plesk-php83 first (see DEPLOYMENT.md §1), then re-run."
+# Make the found PHP visible to subprocesses (composer's shebang is
+# `#!/usr/bin/env php` — on Plesk bare `php` isn't on the PATH).
+PHP_DIR="$(dirname "$PHP_BIN")"
+case ":$PATH:" in *":$PHP_DIR:"*) ;; *) export PATH="$PHP_DIR:$PATH" ;; esac
 ok "PHP $("$PHP_BIN" -r 'echo PHP_VERSION;') at $PHP_BIN"
 
 info "Checking required PHP extensions"

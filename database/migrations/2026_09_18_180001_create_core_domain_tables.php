@@ -57,16 +57,37 @@ return new class extends Migration
             $table->index(['stage', 'due_date']);
         });
 
-        Schema::create('order_lines', function (Blueprint $table) {
+        // Suppliers + stock items must exist before order_lines and the
+        // purchase-order tables reference them (MySQL InnoDB requires the
+        // referenced table to exist at FK creation time).
+        Schema::create('suppliers', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('order_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('stock_item_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('description');
+            $table->string('name');
+            $table->string('contact_name')->nullable();
+            $table->string('email')->nullable();
+            $table->string('phone')->nullable();
+            $table->text('address')->nullable();
+            $table->text('notes')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('stock_items', function (Blueprint $table) {
+            $table->id();
+            $table->string('sku')->unique();
+            $table->string('name');
             $table->string('type', 20)->default('garment');
-            $table->unsignedInteger('quantity')->default(1);
-            $table->unsignedInteger('price')->default(0);
+            $table->string('category')->nullable();
+            $table->string('unit', 20)->default('each');
+            $table->unsignedInteger('qty_on_hand')->default(0);
+            $table->unsignedInteger('qty_reserved')->default(0);
+            $table->unsignedInteger('reorder_level')->default(0);
+            $table->unsignedInteger('reorder_qty')->default(0);
+            $table->foreignId('supplier_id')->nullable()->constrained()->nullOnDelete();
+            $table->unsignedInteger('cost')->default(0);
             $table->text('notes')->nullable();
             $table->timestamps();
+            $table->index(['type', 'category']);
         });
 
         Schema::create('order_stage_history', function (Blueprint $table) {
@@ -110,7 +131,8 @@ return new class extends Migration
         Schema::dropIfExists('order_documents');
         Schema::dropIfExists('artwork_versions');
         Schema::dropIfExists('order_stage_history');
-        Schema::dropIfExists('order_lines');
+        Schema::dropIfExists('stock_items');
+        Schema::dropIfExists('suppliers');
         Schema::dropIfExists('orders');
         Schema::dropIfExists('production_stages');
         Schema::table('users', function (Blueprint $table) {
