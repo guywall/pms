@@ -20,6 +20,11 @@ php artisan migrate --seed
 php artisan serve       # http://127.0.0.1:8000
 ```
 
+`php artisan migrate --seed` runs `ProductionSeeder` (roles, the default
+pipeline stages and one admin account — it prompts for the admin email and
+password when run interactively, or use `SEED_ADMIN_EMAIL` /
+`SEED_ADMIN_PASSWORD` env vars), plus `DemoSeeder` in local environments.
+
 ### Demo logins (from seeder)
 
 | User | Role | Panel |
@@ -31,6 +36,18 @@ php artisan serve       # http://127.0.0.1:8000
 
 Demo data includes `JOB-2026-00001` (60 allocated / 40 shortfall — try the
 "Raise PO for shortfall" action) and `JOB-2026-00002` in the Artwork stage.
+
+Demo data is **not** seeded on production (`APP_ENV=production`) unless you
+ask for it: `php artisan db:seed --force --class=DemoSeeder`.
+
+## Server install (Plesk)
+
+```bash
+bash scripts/install.sh   # one command from the app folder on the server
+```
+
+Full walkthrough: `DEPLOYMENT.md`. Future updates after a git pull:
+`bash scripts/update.sh`.
 
 ## How it fits together
 

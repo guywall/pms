@@ -1,292 +1,206 @@
 # Deployment Guide — pms.threewalls.co.uk (Plesk Obsidian, AlmaLinux 8)
 
-Step-by-step deployment to the existing Plesk server
-(8-core EPYC, 16 GB RAM — ample for this app). No Docker, Node build or
-Redis is required; only PHP 8.3 + MySQL + two cron tasks.
+Step-by-step deployment to the existing Plesk server (8-core EPYC,
+16 GB RAM — ample). No Docker, Node build or Redis is required; only
+PHP 8.3 + MySQL + two cron tasks.
 
-Total time: roughly 30–45 minutes.
+**The short version:** there is an installer. Push the repo, open a
+terminal on the server, run `bash scripts/install.sh`, answer the
+prompts, and do the two Plesk steps it prints at the end. Everything
+below is that process in detail, with a full manual fallback.
 
 ---
 
-## 0. Create the Git repo (your machine)
+## 0. Get the code to the server (GitHub Desktop + Plesk Git)
 
-From `C:\Users\guy\Documents\PrintAbility\pms`:
+GitHub Desktop already covers the local side (commit → publish/push).
+On the server there are two equally good options:
+
+**Option A — Plesk Git extension (recommended: push-to-deploy)**
+
+1. Plesk → *Websites & Domains* → `pms.threewalls.co.uk` → **Git** →
+   *Add Repository*.
+2. Remote: your repo URL, branch `main`. For a **private** repo, add a
+   deploy key first: SSH in, run `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""`,
+   paste `~/.ssh/id_ed25519.pub` into GitHub → repo → *Deploy keys*.
+3. Deployment mode: *Quick*, target = the domain's home directory
+   (`/var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk`).
+4. *Fetch & Deploy* once. The code now sits in the domain folder.
+
+**Option B — plain SSH**
 
 ```bash
-git init
-git add .
-git commit -m "Initial PrintAbility application"
+ssh <subscription-user>@threewalls.co.uk
+cd /var/www/vhosts/threewalls.co.uk
+git clone git@github.com:<you>/printability.git pms.threewalls.co.uk
 ```
 
-Create the empty repo on GitHub/GitLab/Bitbucket (Private), then:
+> If the domain folder isn't empty (a default `httpdocs` exists), clone
+> into a subfolder such as `pms.threewalls.co.uk/app` and use that path
+> everywhere below, pointing the docroot at `app/public`.
+
+---
+
+## 1. The installer (does almost everything)
+
+From the domain folder on the server:
 
 ```bash
-git remote add origin git@github.com:<you>/printability.git
-git branch -M main
-git push -u origin main
+bash scripts/install.sh
 ```
 
-> **Checked:** `.env` and `database/database.sqlite` (your local demo data)
-> are git-ignored, so no secrets or junk go to the repo. `composer.lock` IS
-> committed — always deploy with the exact locked versions.
+It will:
 
-If Plesk will pull from a **private** repo, add a *deploy key*:
-generate on the server (`ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""`),
-copy `~/.ssh/id_ed25519.pub` into the repo host's *Deploy keys* settings.
+1. Locate PHP ≥ 8.2 (Plesk paths first) and **check all required
+   extensions** — if any are missing it prints the exact `dnf` command
+   and stops.
+2. Make sure Composer exists (downloads a project-local
+   `composer.phar` if the server has none).
+3. Create `.env` and prompt for: the public URL, MySQL host/name/user/
+   password (create the DB first — see §2), and your SMTP relay.
+4. Run `composer install --no-dev --optimize-autoloader`, generate the
+   app key, create the `storage` symlink, fix permissions.
+5. Run migrations, then seed **roles + default pipeline stages + one
+   admin account** (it prompts for the admin email/password; a strong
+   password is pre-generated — just press enter to accept it).
+6. Optionally load demo customers/orders (answer **N** on a live
+   system — you can add it later with
+   `php artisan db:seed --force --class=DemoSeeder`).
+7. Build production caches and print the **two remaining Plesk steps**
+   (document root + scheduled tasks, see §3).
 
----
+Re-running the installer is safe: it keeps your existing `.env`, and
+re-seeding only adds what's missing (e.g. a second admin account).
 
-## 1. Server prerequisites (one-off, via SSH or Plesk UI)
+### Non-interactive / scripted install
 
-1. **PHP 8.3** — Plesk → *Tools & Settings* → *PHP Settings* → *Handle
-   versions of PHP*. If 8.3 is missing, install via SSH:
+Every prompt has an env-var equivalent:
 
-   ```bash
-   sudo dnf install plesk-php83-release
-   sudo dnf install plesk-php83-php-{mysqlnd,mbstring,opcache,intl,gd,zip,exif,process}
-   ```
+```bash
+SEED_ADMIN_EMAIL=admin@threewalls.co.uk \
+SEED_ADMIN_PASSWORD='…' \
+bash scripts/install.sh
+```
 
-   Verify every extension we need shows *on* for 8.3:
-   `mysqlnd/pdo_mysql, mbstring, openssl, curl, fileinfo, gd, zip, intl, exif`.
-
-2. **Composer** — Plesk → *Applications* → *Composer* (register an
-   installation), or via SSH:
-
-   ```bash
-   sudo dnf install composer   # or follow getcomposer.org
-   composer --version
-   ```
-
-3. **Git** — Plesk → *Extensions* → install **Git** (free).
-
-4. **Laravel Toolkit** — Plesk → *Extensions* → install **Laravel Toolkit**
-   (free). This gives a per-domain UI for artisan commands, scheduler and
-   queue workers.
-
----
-
-## 2. Database
+## 2. The database (before the installer)
 
 Plesk → *Databases* → *Add Database*:
 
-- Database name: `pms_threewalls`
+- Database name: `pms_threewalls` (or anything you like)
 - Related site: `pms.threewalls.co.uk`
-- User / password: `pms_user` / generate a strong one — **save it**, the .env
-  needs it in step 4.
+- User / password: generate a strong one — the installer asks for it
 
-Note the **MySQL server** shown for the database (usually `localhost:3306`).
+## 3. The two manual Plesk steps
 
----
+**Document root** — *Websites & Domains* → `pms.threewalls.co.uk` →
+*Hosting Settings* → set **Document root** to the app's `public`
+folder, e.g. `pms.threewalls.co.uk/public` (or `…/app/public` if you
+cloned into a subfolder).
 
-## 3. Clone the code with Plesk Git
-
-Plesk → *Websites & Domains* → `pms.threewalls.co.uk` → **Git**:
-
-1. *Add Repository*
-2. Remote: your repo URL; branch `main`
-3. **Deployment mode:** *Quick* is fine — we override the actions below.
-4. Before saving, set **"Apply 'git push' with the following deployment
-   actions"**:
-
-   - ✓ Pull files from repository into the site — set **Target root** to the
-     **domain's home directory**
-     (`/var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk`)
-
-   ⚠️ The repo root maps to the domain home. Files like `artisan` will live at
-   `/var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk/artisan` and the
-   web root will be `.../pms.threewalls.co.uk/httpdocs` (see step 5 — if your
-   layout differs, adjust the paths in later steps accordingly).
-
-5. Click *OK*, then *Pull* / *Fetch & Deploy* once to get the code on the
-   server.
-
-If Plesk Git fights you on docroot/paths, the fallback is plain SSH:
-
-```bash
-cd /var/www/vhosts/threewalls.co.uk
-git clone git@github.com:<you>/printability.git pms.threewalls.co.uk/app
-# then skip step 5 and point docroot at .../pms.threewalls.co.uk/app/public
-```
-
----
-
-## 4. Configure the app (SSH)
-
-All commands run as your subscription's system user
-(`ssh <user>@threewalls.co.uk`), NOT as root.
-
-```bash
-cd /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk
-
-# Environment
-cp .env.example .env
-nano .env
-```
-
-Edit to:
-
-```env
-APP_NAME=PrintAbility
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://pms.threewalls.co.uk
-APP_TIMEZONE=Europe/London
-APP_KEY=            # leave empty, next command fills it
-
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=pms_threewalls
-DB_USERNAME=pms_user
-DB_PASSWORD=<the password from step 2>
-
-SESSION_DRIVER=database
-QUEUE_CONNECTION=database
-CACHE_STORE=database
-FILESYSTEM_DISK=local
-
-MAIL_MAILER=smtp
-MAIL_HOST=smtp-relay.example.com      # Brevo/Postmark/etc — set SPF/DKIM!
-MAIL_PORT=587
-MAIL_USERNAME=<relay user>
-MAIL_PASSWORD=<relay password>
-MAIL_FROM_ADDRESS=print@threewalls.co.uk
-MAIL_FROM_NAME=PrintAbility
-```
-
-Then:
-
-```bash
-# Right PHP version on PATH (Plesk prefixes plesk binaries)
-PHP=/opt/plesk/php/8.3/bin/php
-$PHP /usr/local/bin/composer install --no-dev --optimize-autoloader
-
-$PHP artisan key:generate --force
-$PHP artisan migrate --force
-$PHP artisan db:seed --force          # FIRST DEPLOY ONLY
-$PHP artisan storage:link             # public storage symlink
-```
-
-Permissions (subscription user owns everything; PHP-FPM runs as the same
-user on Plesk, so this is normally enough):
-
-```bash
-chmod -R ug+rwX storage bootstrap/cache
-```
-
----
-
-## 5. Point the document root at /public
-
-Plesk → *Websites & Domains* → `pms.threewalls.co.uk` → *Hosting Settings*:
-
-- **Document root:** change from `httpdocs` to the app's `public` folder,
-  e.g. `pms.threewalls.co.uk/public` (Laravel Toolkit can do this:
-  *Laravel* → select `APP_DIR` → it offers to set the docroot).
-
-Verify: `https://pms.threewalls.co.uk` should redirect to
-`https://pms.threewalls.co.uk/admin/login` and show the PrintAbility login.
-
----
-
-## 6. Scheduler + queue worker
-
-Add **two** Plesk Scheduled Tasks (*Websites & Domains* → *Scheduled Tasks* →
-*Add Task*, type **Run a command**), both **every minute**, run as the
-subscription user:
-
-**Task 1 — scheduler**
+**Scheduled tasks** — *Websites & Domains* → *Scheduled Tasks* →
+*Add Task* → type *Run a command*, both **every minute**, running as
+the subscription user:
 
 ```
 /opt/plesk/php/8.3/bin/php /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk/artisan schedule:run
 ```
-
-**Task 2 — queue worker**
 
 ```
 /opt/plesk/php/8.3/bin/php /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk/artisan queue:work --stop-when-empty --max-time=55
 ```
 
 (The worker drains the queue then exits; cron restarts it next minute —
-that's the safe Plesk pattern, no supervisor needed.)
+the safe shared-hosting pattern, no supervisor needed. Laravel
+Toolkit's *Scheduler* / *Queue workers* toggles do the same via UI.)
 
-Alternatively, *Laravel Toolkit* → the domain → *Scheduler / Queue workers*
-toggles do the same thing via UI.
+Verify: `https://pms.threewalls.co.uk` lands on the PrintAbility login
+at `/admin`.
 
 ---
 
-## 7. Production caches
+## 4. Future updates
+
+1. Commit & push from GitHub Desktop.
+2. Deploy the new code: *Fetch & Deploy* in Plesk Git (or `git pull`).
+3. Run:
 
 ```bash
-$PHP artisan config:cache
-$PHP artisan route:cache
-$PHP artisan view:cache
-$PHP artisan event:cache
+bash scripts/update.sh
 ```
 
-> Re-run these after every deploy (or use the deploy actions in step 8).
+That does `composer install --no-dev`, `migrate --force` and rebuilds
+all caches. To skip step 3 permanently, put exactly those commands into
+the repo's **Deployment actions** in the Plesk Git settings:
 
----
-
-## 8. Future updates (every release)
-
-Update **Deployment actions** in the Plesk Git repo settings to:
-
-```bash
-/opt/plesk/php/8.3/bin/php /usr/local/bin/composer install --no-dev --optimize-autoloader
-/opt/plesk/php/8.3/bin/php /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk/artisan migrate --force
-/opt/plesk/php/8.3/bin/php /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk/artisan config:cache
-/opt/plesk/php/8.3/bin/php /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk/artisan route:cache
-/opt/plesk/php/8.3/bin/php /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk/artisan view:cache
+```
+bash scripts/update.sh
 ```
 
-Then every `git push origin main` → *Fetch & Deploy* in Plesk = updated site.
+(Plesk runs deployment actions from the repo root, so the relative
+path works. PHP/Composer discovery inside the script is automatic.)
 
-Manual alternative over SSH:
+## 5. Post-deploy checklist
 
-```bash
-cd /var/www/vhosts/threewalls.co.uk/pms.threewalls.co.uk
-git pull
-/opt/plesk/php/8.3/bin/php /usr/local/bin/composer install --no-dev --optimize-autoloader
-/opt/plesk/php/8.3/bin/php artisan migrate --force --force
-/opt/plesk/php/8.3/bin/php artisan config:cache && /opt/plesk/php/8.3/bin/php artisan route:cache && /opt/plesk/php/8.3/bin/php artisan view:cache
-```
+1. Log in at `/admin` with the admin account you created in the
+   installer → change the password if you didn't set one.
+2. *Users* → create real staff accounts with roles
+   (super_admin, manager, artworker, print/embroidery operator, storekeeper).
+3. *Customers* → add real customers + portal users.
+4. *Pipeline stages* → tune names/sequence/gates to the real process
+   (defaults: New order → Artwork → Pre-production → Printing →
+   Embroidery → Finishing → QC → Packing → Complete).
+5. *Stock items* → import opening stock (SKU, name, type, qty, reorder level).
+6. Send a test email (any notification) to confirm the SMTP relay +
+   SPF/DKIM on threewalls.co.uk.
+7. Print a job ticket and a stock label; scan them with the `/scan` page.
+8. Demo data (if you loaded any): delete Acme Corp / JOB-2026-00001/2 /
+   `*@example.test` users before going live.
 
----
-
-## 9. Post-deploy checklist
-
-1. Log in at `/admin` with `admin@example.test` / `password`
-   → **change the password immediately** (avatar menu → My account).
-2. Delete/replace seed users you don't need (`artworker@`, `store@`,
-   `portal@acme.test`, Acme Corp, demo orders) — or leave JOB-2026-00001/2
-   as training examples, your call.
-3. *Users* → create real staff accounts with roles.
-4. *Customers* → add real customers + portal users.
-5. *Pipeline stages* → tune names/sequence/gates to the real process
-   (defaults: New order → Artwork → Pre-production → Printing → Embroidery →
-   Finishing → QC → Packing → Complete).
-6. *Stock items* → import opening stock (SKU, name, type, qty, reorder level).
-7. Send a test email (any notification) to confirm the SMTP relay + SPF/DKIM.
-8. Print a job ticket and a stock label; scan them with the `/scan` page.
-
----
-
-## 10. Backups & monitoring
+## 6. Backups & monitoring
 
 - Plesk *Backup Manager*: schedule **daily** backups of the subscription
-  (includes DB + `storage/app` artwork) to remote storage (S3/FTP) if possible.
+  (includes DB + `storage/app` artwork) to remote storage if possible.
 - Application logs: `storage/logs/laravel.log`.
-- Queue health: if notifications stop sending, check *Scheduled Tasks* ran
-  (task history) and `storage/logs/laravel.log`.
+- Queue health: if notifications stop sending, check *Scheduled Tasks*
+  history and `storage/logs/laravel.log`.
+
+---
+
+## Appendix: full manual install (no installer)
+
+Use only if you can't/won't run the script.
+
+1. **PHP 8.3** with `mysqlnd/pdo_mysql, mbstring, openssl, curl,
+   fileinfo, gd, zip, intl, exif` — *Tools & Settings → PHP Settings*;
+   missing pieces via
+   `sudo dnf install plesk-php83-php-{mysqlnd,mbstring,opcache,intl,gd,zip,exif,process}`.
+2. **Composer** — *Applications → Composer* or `sudo dnf install composer`.
+3. **Git + Laravel Toolkit** extensions (both free).
+4. Create `.env` from `.env.example` and set APP_URL, MySQL, SMTP as in
+   the installer section.
+5. ```bash
+   PHP=/opt/plesk/php/8.3/bin/php
+   $PHP /usr/local/bin/composer install --no-dev --optimize-autoloader
+   $PHP artisan key:generate --force
+   $PHP artisan migrate --force
+   $PHP artisan db:seed --force        # prompts for the admin account
+   $PHP artisan storage:link
+   chmod -R ug+rwX storage bootstrap/cache
+   $PHP artisan config:cache && $PHP artisan route:cache && $PHP artisan view:cache
+   ```
+6. Document root + scheduled tasks: see §3.
+7. Update routine: `git pull` → `composer install --no-dev` →
+   `migrate --force` → rebuild caches (i.e. what `scripts/update.sh` does).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
+| Installer: "No PHP >= 8.2 found" | Install plesk-php83 (§ Appendix step 1), re-run |
+| Installer lists missing extensions | Run the printed `dnf` command as root, re-run installer |
 | 404 on every page | docroot not pointing at `public` |
 | 500 after deploy | `php artisan config:clear`, check `storage/logs/laravel.log`, ensure `.env` has DB creds |
-| "Composer not found" in tasks | use full path `/usr/local/bin/composer` or `/usr/bin/composer` |
-| Emails not arriving | check relay creds, SPF/DKIM on threewalls.co.uk, `queue:work` cron running |
-| Login works then immediately 403/redirect loop | user `is_staff` flag wrong for that panel |
-| Slow first page load after deploy | caches not rebuilt — run step 8 cache commands |
+| "Composer not found" in tasks | installer drops `composer.phar` in the project — the scripts use it automatically |
+| Emails not arriving | check relay creds, SPF/DKIM on threewalls.co.uk, queue cron running |
+| Login works then 403/redirect loop | user `is_staff` flag wrong for that panel |
+| Slow first page after deploy | caches not rebuilt — `bash scripts/update.sh` |
