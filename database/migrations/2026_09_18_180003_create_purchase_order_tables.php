@@ -33,14 +33,21 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Now that purchase_orders exists, add the FK deferred from 180002.
+        // Now that purchase_orders exists, add the FKs deferred from 180002.
         Schema::table('order_stock_allocations', function (Blueprint $table) {
+            $table->foreign('purchase_order_id')->references('id')->on('purchase_orders')->nullOnDelete();
+        });
+
+        Schema::table('stock_movements', function (Blueprint $table) {
             $table->foreign('purchase_order_id')->references('id')->on('purchase_orders')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
+        Schema::table('stock_movements', function (Blueprint $table) {
+            $table->dropForeign(['purchase_order_id']);
+        });
         Schema::table('order_stock_allocations', function (Blueprint $table) {
             $table->dropForeign(['purchase_order_id']);
         });

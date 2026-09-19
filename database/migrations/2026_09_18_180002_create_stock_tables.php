@@ -45,7 +45,8 @@ return new class extends Migration
             $table->unsignedInteger('qty_on_hand_after');
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('order_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('purchase_order_id')->nullable()->constrained()->nullOnDelete();
+            // purchase_orders doesn't exist yet — FK added in 180003
+            $table->unsignedBigInteger('purchase_order_id')->nullable()->index();
             $table->string('reference')->nullable();
             $table->text('notes')->nullable();
             $table->timestamps();
